@@ -44,7 +44,7 @@ colnames(findata)
 # IMD:                    Index of multiple deprivation in quintiles as of 2011
 # TotalICUBeds            Number of intensive care unit beds per population as of February 2020
 # days.diff               Number of days since first reported COVID19 case per LSOA (up to June 30, 2020)
-# NumberCases             Number of tested positive COVD19 cases per LSOA (up to June 30, 2020)
+# NumberCases             Number of tested positive COVID19 cases per LTLA (up to June 30, 2020)
 # no2.weighted            Population weighted mean during 2014-2018 NO2 exposure [??g/m^3]
 # pm25.weighted           Population weighted mean during 2014-2018 PM2.5 exposure [??g/m^3]
 #------------------------------------------------------------------------------------------------
