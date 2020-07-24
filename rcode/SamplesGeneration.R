@@ -26,7 +26,9 @@ dat$deathsd <- dat$Deaths*dat$pi
 
 
 # Index all possible combinations of sex - ethnicity - ageclass - LTLA
-dat <- dat %>%  mutate(ID = group_indices(., Sex, groupIDX))  
+dat$ID <- dat %>% group_by( Sex, groupIDX) %>%  group_indices
+
+
 
 # check |sex| * |ethnicity| * |ageclasses| * |LTLA| = dat$ID -> check that all combinations of age, 
 # sex ethnicity and LTLA are considered in the weigths from the deaths file
