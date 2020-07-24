@@ -19,11 +19,9 @@ library(sf)
 library(maptools)
 library(parallel)
 
-# working directory
-setwd("C:/Users/gkonstan/Desktop/epimodel/Git")
 
 # Read main covariates file
-findata <- readRDS("200722_FindataGit")
+findata <- readRDS("data/200722_FindataGit")
 colnames(findata)
 
 
@@ -78,7 +76,7 @@ findata@data[,cov2scale] <- apply(findata@data[,cov2scale], 2, scale)
 findata <- st_as_sf(findata)
 
 # load the downscaling samples
-dat.sample <- readRDS(paste0("SamplesDownscaleCOVID_", analysis))
+dat.sample <- readRDS("data/SamplesDownscaleCOVID")
 
 
 # Define formulas for the analysis
@@ -112,7 +110,6 @@ form.anal <- list(
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym), 
   
-  #-------
   #-------Sensitivity 3: 
   # No spread
   cmb5 = deaths ~ 1 + pol +  
@@ -133,7 +130,6 @@ form.anal <- list(
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym), 
     
-  #-------
   #-------Sensitivity 4, quintiles: 
   # Model 1
   cmb7 = deaths ~ 1 + factor(pol.quintiles), 
@@ -163,7 +159,6 @@ form.anal <- list(
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym), 
   
-  #-------
   #-------Post-hoc comorbidities 
   # Model 4
   cmb11 = deaths ~ 1 + 
@@ -298,7 +293,7 @@ for(i in 1:8){
   fin_mod <- inla.merge(outpar)
   
   # and store
-  saveRDS(fin_mod, file = paste0("BMA_CMB_", i, "_", pol))
+  saveRDS(fin_mod, file = paste0("data/BMA_CMB_", i, "_", pol))
   
 }
 

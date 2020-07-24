@@ -18,13 +18,12 @@ library(spdep)
 library(lwgeom)
 
 
-setwd("/data")
+# Read gridded World population files
+r_1 = raster("data/gpw_v4_population_count_rev11_2015_30_sec_2.asc")
+r_2 = raster("data/gpw_v4_population_count_rev11_2015_30_sec_3.asc")
 
-r_1 = raster("gpw_v4_population_count_rev11_2015_30_sec_2.asc")
-r_2 = raster("gpw_v4_population_count_rev11_2015_30_sec_3.asc")
-
-
-england.shape = readRDS("EnglandLand")
+# read the land of England file
+england.shape = readRDS("data/EnglandLand")
 england.shape = spTransform(england.shape, crs(r_2))
 
 t_0 = Sys.time()
@@ -50,8 +49,8 @@ s_5 <- rasterToPolygons(s_4)
 plot(s_5[1:10000,])
 # this conversion is slightly problematic in the boundaries.
 
-# read LSOA file
-LSOA <- readRDS("LSOA")
+# read LSOA file (only the boundaries)
+LSOA <- readRDS("data/LSOA")
 
 s_5 <- spTransform(s_5, crs(LSOA))
 s_6 <- st_as_sf(s_5)
@@ -131,7 +130,6 @@ NN <- get.knnx(notna.points, na.points, k = 1) $nn.index
 s_9$layer[is.na(s_9$ID)] <- s_9$layer[NN]
 s_9$ID[is.na(s_9$ID)] <- s_9$ID[NN]
 
-summary(s_9@data) 
 
 s_10 <- st_as_sf(s_9)
 
@@ -140,10 +138,10 @@ length(unique(s_10$lsoa11cd)) - nrow(LSOA)
 length(unique(s_10$ID)) - nrow(s_6)
 # perfect match
 
-# saveRDS(s_10, file = "PopEngland1kmLSOA")
+# saveRDS(s_10, file = "data/PopEngland1kmLSOA")
 
 # load the file with the population of LSOAs and put together with the World population
-LSOApop <- readRDS("LSOApop")
+LSOApop <- readRDS("data/LSOApop")
 LSOApop <- as.data.frame(LSOApop)
 LSOApop$geometry <- NULL
 colnames(LSOApop)[2] <- "LSOApop"
@@ -201,7 +199,7 @@ s_13$Popijtilde <- s_13$v*s_13$LSOApop
 sum(s_13$Popijtilde) - sum(LSOApop$LSOApop)
 
 # and store
-# saveRDS(s_13, file = "PopEngland1kmLSOA")
+# saveRDS(s_13, file = "data/PopEngland1kmLSOA")
 
 
 ###################################################################################################

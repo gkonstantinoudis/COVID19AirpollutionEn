@@ -1,17 +1,21 @@
-# Created 23.07.2020
+
+
+
+# Last updated 23.07.2020
 
 
 # Weights to downscale the COVID19 to LSOAs
 
 
 
-##############################################################################
+############################################################################################################
+
 
 library(parallel)
 library(dplyr)
 library(tidyverse)
 library(data.table)
-
+library(pbapply)
 
 # import population data 
 dat <- readRDS("data/pop_df_GIT")
@@ -115,4 +119,64 @@ for(i in 1:n_samples){
 }
 
 
-saveRDS(list.loop, "samples")
+# Now calculate the age*sex*ethnicity specific expected based on the different samples
+
+dat <- as.data.table(dat)
+dat$IDsample <- 1:nrow(dat)
+
+# clean file and remove NAs
+list.int <- lapply(list.loop, function(X){
+  Y <- do.call(c, X)
+  Y <- Y[complete.cases(Y)]
+  return(Y)
+})
+
+# aggregate per ID
+dat.s <- lapply(list.int, function(X){
+  
+  dat.sample <- data.frame(ID = X, cases = 1)
+  dat.sample <- aggregate(dat.sample$cases, by = list(ID = dat.sample$ID), sum)
+  colnames(dat.sample)[2] <- "n.deaths"
+  return(dat.sample)
+})
+
+# and now calculate the expected, needs ~1/2hour
+dat.expected <- pblapply(dat.s, function(X){
+  
+  dat.tmp <- left_join(dat, X, by = c("IDsample" = "ID"))
+  dat.tmp$n.deaths[is.na(dat.tmp$n.deaths)] <- 0
+  
+  # get the death rate by age sex and ethinicity
+  dat.marg <- aggregate(cbind(dat.tmp$PopEst2018, dat.tmp$n.deaths), 
+                        by = list(Ethnicity = dat.tmp$Ethnicity, Sex = dat.tmp$Sex, Age = dat.tmp$Age), 
+                        sum)
+  
+  colnames(dat.marg)[c(4:5)] <- c("Pop", "n.deaths.sum")
+  dat.marg$death.rate4exp <- dat.marg$n.deaths/dat.marg$Pop
+  
+  dat.tmp <- left_join(dat.tmp, dat.marg, by = c("Ethnicity", "Sex", "Age"))
+  
+  dat.tmp$expected <- dat.tmp$PopEst2018*dat.tmp$death.rate4exp
+  
+  dat.fin <- aggregate(cbind(dat.tmp$n.deaths, dat.tmp$expected), by = list(LSOA = dat.tmp$LSOA), sum)
+  colnames(dat.fin)[c(2,3)] <- c("deaths", "expected") 
+  
+  return(dat.fin)
+})
+
+
+# check
+sum(sapply(dat.expected, function(X) sum(X$deaths) == sum(X$expected))) == 110
+# correct
+
+# store it
+saveRDS(dat.expected, file = "data/SamplesDownscaleCOVID")
+
+
+
+############################################################################################################
+############################################################################################################
+############################################################################################################
+############################################################################################################
+
+
