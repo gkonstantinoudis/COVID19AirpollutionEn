@@ -14,6 +14,7 @@
 library(parallel)
 library(dplyr)
 library(tidyverse)
+
 library(data.table)
 library(pbapply)
 
@@ -29,16 +30,9 @@ dat = dat %>% group_by(LTLA, Age, Ethnicity, Sex) %>% mutate(PopTot2018 = sum(Po
 dat$deathsd <- dat$Deaths*dat$pi
 
 
-# Index all possible combinations of sex - ethnicity - ageclass - LTLA
-dat$ID <- dat %>% group_by( Sex, groupIDX) %>%  group_indices
-
-
-
 # check |sex| * |ethnicity| * |ageclasses| * |LTLA| = dat$ID -> check that all combinations of age, 
 # sex ethnicity and LTLA are considered in the weigths from the deaths file
-max(dat$ID) == 32600*2
-
-
+max(dat$ID) == 2*5*20*317
 
 IDs <- unique(dat$ID)
 dat <- as.data.table(dat)
@@ -60,7 +54,13 @@ clusterEvalQ(cl, library(data.table))
 ## Selection Step: 
 # create a list of dataframes, one for each sex-age-ethnicity-ltla combination,
 # to be indipendently sampled from
-dd = parallel::parLapply(cl, IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')])
+dd = parLapply(cl, IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')])
+
+# for linux/mac 
+# dd = parallel::mclapply(IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')], mc.cores = n_cores)
+
+
+
 dn = dat %>% group_by(ID) %>% summarise( nlist = n(), ndeaths = mean(Deaths) )
 clusterExport(cl, "dd")
 
@@ -102,8 +102,11 @@ for(j in 1:n_samples){
   clusterExport(cl, "list_sample")
 
   # retrive index of the sampled LSOA
-  list.loop[[j]] = parallel::parLapply(cl, 1:length(IDs), function(i) dd[[i]]$IDsample[list_sample[[i]]]) 
-
+ list.loop[[j]] = parallel::parLapply(cl, 1:length(IDs), function(i) dd[[i]]$IDsample[list_sample[[i]]]) 
+ 
+# for linux/mac: 
+# list.loop[[j]] = pbmcapply::pbmclapply(1:length(IDs), function(i) dd[[i]]$IDsample[list_sample[[i]]], mc.cores = n_cores) 
+  
 }
 
 
