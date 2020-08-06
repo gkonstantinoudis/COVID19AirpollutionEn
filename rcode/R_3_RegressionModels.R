@@ -21,7 +21,7 @@ library(parallel)
 
 
 # Read main covariates file
-findata <- readRDS("data/200722_FindataGit")
+findata <- readRDS("data/20807_FindataGit")
 colnames(findata)
 
 
