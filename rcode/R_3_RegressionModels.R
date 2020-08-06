@@ -125,7 +125,7 @@ form.anal <- list(
   # Only spread
   cmb6 = deaths ~ 1 + pol +  
     # confounders
-    days.diff + NumberCases
+    days.diff + NumberCases +
     # LF
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym), 
@@ -154,7 +154,7 @@ form.anal <- list(
       factor(IMD) + days.diff + NumberCases + 
       TotalICUBeds + Temperature + RelativeHumidity + 
       log.pop + factor(urbanicity) + high_risk_occ + smoking + 
-      obesity
+      obesity +
     # LF
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym), 
@@ -232,22 +232,23 @@ nb2INLA("W.adj", W.nb)
 
 # bym prior
 hyper.bym <- list(theta1 = list('PCprior', c(1,0.01)), theta2 = list('PCprior', c(0.5, 0.5)))
+hyper.rw<- list(theta = list(prior="pc.prec", param=c(1,0.01), prec=list(initial=log(10^-2), fixed=TRUE)))
 
 # k is the an indicator to run on the different samples
-k <- as.list(1:100)
+k <- as.list(1:5)
 
 
 t_0 <- Sys.time()
 
 # The following loop is computationally expansive. If RAM explodes, you can decrease the number of cores for parallelisation.
-# In addition, the parallel procedure here works for Windows machines, but can easily extended to linux or ios using mclapply.
+# In addition, the parallel procedure here works for Windows machines, but can easily extended to linux or macOS using mclapply.
 
 for(i in 1:8){
   
-  print(i)
+  print(paste("Fitting model ", i, " of ", 8))
   
   if(i %in% c(2,4:8)){
-    thet  <- c(2.136760, 4.782639) # here i give good starting values for the hyperparameters of the latent field to decrease computation time.
+    thet  <- c(2.136760, 4.782639) # here I give good starting values for the hyperparameters of the latent field to decrease computation time.
                                    # These values can be obtained by the inla.object once you run it: inla.object$mode$theta
                                           
   }else{
@@ -268,7 +269,7 @@ for(i in 1:8){
   
   
   # Set up parallel environment
-  ncores <- 10 
+  ncores <- 10
   cl_inla <- makeCluster(ncores, methods=FALSE)
   
   # extract packages on parallel environment 

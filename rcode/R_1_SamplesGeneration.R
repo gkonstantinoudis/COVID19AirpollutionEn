@@ -13,17 +13,18 @@
 
 library(parallel)
 library(dplyr)
-library(tidyverse)
 
-library(data.table)
+#library(data.table)
 library(pbapply)
 
 # import population data 
 dat <- readRDS("data/pop_df_GIT")
+dat = as_tibble(dat)
 
 dat = dat %>% group_by(LTLA, Age, Ethnicity, Sex) %>% mutate(PopTot2018 = sum(PopEst2018), 
                                                              pi = PopEst2018/PopTot2018  )
-
+dat$pi[is.na(dat$pi)] = 0
+dat$Deaths[is.na(dat$Deaths)] = 0
 
 
 # weigth deaths by population weights
@@ -35,7 +36,7 @@ dat$deathsd <- dat$Deaths*dat$pi
 max(dat$ID) == 2*5*20*317
 
 IDs <- unique(dat$ID)
-dat <- as.data.table(dat)
+#dat <- as.data.table(dat)
 dat$IDsample <- 1:nrow(dat)
 
 
@@ -48,26 +49,27 @@ cl<-makeCluster(n_cores)
 # load objects in the newly defined cluster
 clusterExport(cl, "dat")
 clusterExport(cl, "IDs")
-clusterEvalQ(cl, library(data.table))
+clusterEvalQ(cl, library(dplyr))
 
 
 ## Selection Step: 
 # create a list of dataframes, one for each sex-age-ethnicity-ltla combination,
 # to be indipendently sampled from
-dd = parLapply(cl, IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')])
+
+dd = parLapply(cl, IDs, function(id) dat %>% dplyr::filter(ID == id) %>% dplyr::select(deathsd,pi, IDsample))
 
 # for linux/mac 
 # dd = parallel::mclapply(IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')], mc.cores = n_cores)
 
+stopCluster(cl)
 
 
 dn = dat %>% group_by(ID) %>% summarise( nlist = n(), ndeaths = mean(Deaths) )
-clusterExport(cl, "dd")
 
 
 set.seed(11)
 
-n_samples = 110 #number of samples   
+n_samples = 10 #number of samples   
 list.loop = list()
 
 ## Sampling Step:
@@ -76,9 +78,11 @@ list.loop = list()
 
 
 for(j in 1:n_samples){
-  list_sample = list()
-  for(i in 1:nrow(dn)){
   
+  print(paste("Extracting sample ", j ," of ", n_samples))
+  list_sample = list()
+  foo.list = list()
+  for(i in 1:nrow(dn)){
     dat.loop <- dd[[i]]
     ndeaths <- dn[i,]$ndeaths
     nlist   <- dn[i,]$nlist
@@ -91,26 +95,21 @@ for(j in 1:n_samples){
                                 size = n, replace = TRUE, 
                                 prob = dat.loop$pi)
       
-      check.eq[i] <- (length(list_sample[[i]]) == n)
-      
+
     }else{
+      
     # if there are no deaths in the selected sex-age-ethnicity-ltla group return NA
       list_sample[[i]] <- NA
     }
     
+    foo.list[[i]] = dd[[i]]$IDsample[list_sample[[i]]]
+    
   }
-  clusterExport(cl, "list_sample")
-
-  # retrive index of the sampled LSOA
- list.loop[[j]] = parallel::parLapply(cl, 1:length(IDs), function(i) dd[[i]]$IDsample[list_sample[[i]]]) 
- 
-# for linux/mac: 
-# list.loop[[j]] = pbmcapply::pbmclapply(1:length(IDs), function(i) dd[[i]]$IDsample[list_sample[[i]]], mc.cores = n_cores) 
   
+  list.loop[[j]] = foo.list
 }
 
 
-stopCluster(cl)
 
 
 
@@ -123,6 +122,8 @@ for(i in 1:n_samples){
 
 
 # Now calculate the age*sex*ethnicity specific expected based on the different samples
+library(data.table)
+
 
 dat <- as.data.table(dat)
 dat$IDsample <- 1:nrow(dat)
@@ -169,7 +170,7 @@ dat.expected <- pblapply(dat.s, function(X){
 
 
 # check
-sum(sapply(dat.expected, function(X) sum(X$deaths) == sum(X$expected))) == 110
+sum(sapply(dat.expected, function(X) sum(X$deaths) == sum(X$expected))) == n_samples
 # correct
 
 # store it
