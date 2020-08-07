@@ -1,11 +1,8 @@
 
-
-
-
 # Created 22.07.2020
 
 
-# Main analysis, sensitivity 3 and 4 and post-hoc
+# Main analysis for data aggregated at Lower Tier Local Authority level
 
 
 
@@ -20,33 +17,48 @@ library(maptools)
 library(parallel)
 library(spdep)
 
-
 # Read main covariates file
-findata <- readRDS("data/20807_FindataGit")
+findata <- readRDS("data/FindataGit_LTLA")
 colnames(findata)
 
 
 #------------------------------------------------------------------------------------------------
 # Explanation of dataframe
 
-# lsoa11cd:               The LSOA code as of 2011
-# Temperature:            Mean temperature during 2014-2018 [oC]
-# RelativeHumidity:       Mean relative during 2014-2018 [%]
-# diabetes:               Diabetes mellitus prevalence as of 2018-2019
-# hypertension:           Hypertension prevalence as of 2018-2019
-# obesity:                Obesity prevalence as of 2018-2019
-# smoking:                Smoking prevalence as of 2018-2019
-# copd:                   Chronic obstructive pulmonary disease prevalence as of 2018-2019
+# LTLA:                   The LTLA code as of 2019
+# Temperature:            Population weighted mean temperature during 2014-2018 [oC]
+# RelativeHumidity:       Population weighted mean relative humidity during 2014-2018 [%]
+# obesity:                Population weighted obesity prevalence as of 2018-2019
+# smoking:                Population weighted smoking prevalence as of 2018-2019
 # high_risk_occ:          Proportion of worker in high risk COVID19 exposure occupations as of 2011
-# log.pop:                Logged population per LSOA as of 2018
-# id:                     An id for each LSOA
+# log.pop:                Logged population per LTLA as of 2018
+# id:                     An id for each LTLA
 # IMD:                    Index of multiple deprivation in quintiles as of 2011
 # TotalICUBeds            Number of intensive care unit beds per population as of February 2020
-# days.diff               Number of days since first reported COVID19 case per LSOA (up to June 30, 2020)
+# days.diff               Number of days since first reported COVID19 case per LTLA (up to June 30, 2020)
 # NumberCases             Number of tested positive COVID19 cases per LTLA (up to June 30, 2020)
 # no2.weighted            Population weighted mean during 2014-2018 NO2 exposure [??g/m^3]
 # pm25.weighted           Population weighted mean during 2014-2018 PM2.5 exposure [??g/m^3]
 #------------------------------------------------------------------------------------------------
+
+
+# compute expected
+
+
+pop_df = readRDS("data/pop_df_GIT")
+
+pop_df$LSOA = NULL
+pop_df$ID = NULL
+pop_df_LTLA = pop_df %>% group_by(Age, Sex, Ethnicity, LTLA) %>% summarise(PopEst2018 = sum(PopEst2018), Deaths = mean(Deaths))
+
+pop_df_LTLA = pop_df_LTLA %>% group_by(Age, Ethnicity, Sex) %>% 
+  mutate(PopTot   = sum(PopEst2018),
+         RatesTot = sum(Deaths)/PopTot,
+         Eijk     = RatesTot* PopEst2018) 
+
+pop_df_LTLA$RatesTot[is.na(pop_df_LTLA$RatesTot)] <- 0
+pop_df_LTLA$Eijk[is.na(pop_df_LTLA$Eijk)] <- 0
+expected_df = pop_df_LTLA %>% group_by(LTLA) %>% summarise(expected = sum(Eijk), deaths = sum(Deaths))
 
 
 # select pollutant
@@ -62,23 +74,15 @@ if(pol == "pm25"){
   colnames(findata)[colnames(findata) %in% "pm25.weighted"]  <- "pol"
 }
 
-# Compute quintiles
-findata$pol.quintiles <- cut(findata$pol, breaks = quantile(findata$pol, probs = 
-                                                              seq(from = 0, to = 1, by = 0.2), na.rm = TRUE),
-                             labels = paste0("Q", 1:5), include.lowest = TRUE)
 
 
 # Scale the covariates
 cov2scale <- c("days.diff", "NumberCases", "TotalICUBeds", "Temperature", "RelativeHumidity",
-               "log.pop", "high_risk_occ", "smoking", "obesity", "copd", "diabetes", "hypertension")
+               "log.pop", "high_risk_occ", "smoking", "obesity")
 
 findata <- as(findata, "Spatial")
 findata@data[,cov2scale] <- apply(findata@data[,cov2scale], 2, scale)
 findata <- st_as_sf(findata)
-
-# load the downscaling samples
-dat.sample <- readRDS("data/SamplesDownscaleCOVID")
-
 
 # Define formulas for the analysis
 
@@ -109,70 +113,8 @@ form.anal <- list(
     obesity + 
     # LF
     f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
-      constr = TRUE, hyper = hyper.bym), 
-  
-  #-------Sensitivity 3: 
-  # No spread
-  cmb5 = deaths ~ 1 + pol +  
-    # confounders
-    factor(IMD) + 
-    TotalICUBeds + Temperature + RelativeHumidity + 
-    log.pop + factor(urbanicity) + high_risk_occ + smoking + 
-    obesity + 
-    # LF
-    f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
-      constr = TRUE, hyper = hyper.bym), 
-  
-  # Only spread
-  cmb6 = deaths ~ 1 + pol +  
-    # confounders
-    days.diff + NumberCases +
-    # LF
-    f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
-      constr = TRUE, hyper = hyper.bym), 
-    
-  #-------Sensitivity 4, quintiles: 
-  # Model 1
-  cmb7 = deaths ~ 1 + factor(pol.quintiles), 
-    
-  # Model 2
-  cmb8 = deaths ~ 1 + factor(pol.quintiles) +  
-    # LF
-    f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
-      constr = TRUE, hyper = hyper.bym), 
-    
-  # Model 3
-  cmb9 = deaths ~ 1 + factor(pol.quintiles) +  
-      # confounders
-      factor(IMD) + days.diff + NumberCases + 
-      TotalICUBeds + Temperature + RelativeHumidity + 
-      log.pop + factor(urbanicity) + high_risk_occ + smoking + 
-      obesity, 
-    
-  # Model 4
-  cmb10 = deaths ~ 1 + factor(pol.quintiles) +  
-      # confounders
-      factor(IMD) + days.diff + NumberCases + 
-      TotalICUBeds + Temperature + RelativeHumidity + 
-      log.pop + factor(urbanicity) + high_risk_occ + smoking + 
-      obesity +
-    # LF
-    f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
-      constr = TRUE, hyper = hyper.bym), 
-  
-  #-------Post-hoc comorbidities 
-  # Model 4
-  cmb11 = deaths ~ 1 + 
-    pol +  
-    # confounders
-    factor(IMD) + days.diff + NumberCases + 
-    TotalICUBeds + Temperature + RelativeHumidity +
-    log.pop + factor(urbanicity) + high_risk_occ + smoking + 
-    obesity + copd_nopol + hyper_nopol + diab_nopol +
-    # LF
-    f(id, model='bym2', graph='W.adj', scale.model = TRUE, 
       constr = TRUE, hyper = hyper.bym)
-   #-------
+  
 )
 
 
@@ -217,7 +159,7 @@ in.mod.Poisson <- function(X, dat.inla){
             control.compute=list(dic=TRUE, cpo=TRUE, config = TRUE), 
             control.predictor=list(link = 1),
             control.inla=list(strategy="simplified.laplace", int.strategy="eb"),
-            control.mode=list(restart = T, theta = thet), 
+            control.mode=list(restart = T), 
             num.threads = 1
   )
   
@@ -233,69 +175,22 @@ nb2INLA("W.adj", W.nb)
 
 # bym prior
 hyper.bym <- list(theta1 = list('PCprior', c(1,0.01)), theta2 = list('PCprior', c(0.5, 0.5)))
-hyper.rw<- list(theta = list(prior="pc.prec", param=c(1,0.01), prec=list(initial=log(10^-2), fixed=TRUE)))
 
-# k is the an indicator to run on the different samples
-k <- as.list(1:5)
-
+dat.inla = left_join(findata, expected_df, by = "LTLA")
 
 t_0 <- Sys.time()
 
-# The following loop is computationally expansive. If RAM explodes, you can decrease the number of cores for parallelisation.
-# In addition, the parallel procedure here works for Windows machines, but can easily extended to linux or macOS using mclapply.
+# initialize return object
+res.list = list()
 
-for(i in 1:8){
-  
-  print(paste("Fitting model ", i, " of ", 8))
-  
-  if(i %in% c(2,4:8)){
-    thet  <- c(2.136760, 4.782639) # here I give good starting values for the hyperparameters of the latent field to decrease computation time.
-                                   # These values can be obtained by the inla.object once you run it: inla.object$mode$theta
-                                          
-  }else{
-    thet <- NULL
-  }
+for(i in 1:4){
+ 
+  print(paste("Fitting model ", i, " of ", 4))
   
   form <- form.anal[[i]]
   
-  inla.parallel <- function(dat.inla){
-    return(in.mod.Poisson(X = form, dat.inla = dat.inla))
-  } 
-  
-  # parallel function
-  par.fun <- function(k){
-    dat.K <- left_join(findata, dat.sample[[k]], by = c("lsoa11cd" = "LSOA"))
-    return(inla.parallel(dat.inla = dat.K))
-  }
-  
-  
-  # Set up parallel environment
-  ncores <- 10
-  cl_inla <- makeCluster(ncores, methods=FALSE)
-  
-  # extract packages on parallel environment 
-  clusterEvalQ(cl_inla, {
-    library(INLA)
-    library(dplyr)
-    library(sf)
-  })
-  
-  # extract R objects on parallel environment
-  clusterExport(cl_inla, c("inla.parallel", "form", "hyper.bym", "hyper.rw","in.mod.Poisson", "par.fun",
-                           "findata", "W.nb", "dat.sample", "k", "thet"))
-  
-  # run the the function in parallel
-  outpar <- parLapply(cl = cl_inla, k, par.fun)
-  
-  
-  # close parallel environment
-  stopCluster(cl_inla)
-  
-  # Propagate the uncertainty of the sampling
-  fin_mod <- inla.merge(outpar)
-  
-  # and store
-  saveRDS(fin_mod, file = paste0("data/BMA_CMB_", i, "_", pol))
+  res.list[[i]] = in.mod.Poisson(X = form, dat.inla = dat.inla)
+ 
   
 }
 
