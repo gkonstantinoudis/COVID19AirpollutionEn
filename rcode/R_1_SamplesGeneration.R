@@ -58,8 +58,10 @@ clusterEvalQ(cl, library(dplyr))
 
 dd = parLapply(cl, IDs, function(id) dat %>% dplyr::filter(ID == id) %>% dplyr::select(deathsd,pi, IDsample))
 
-# for linux/mac 
-# dd = parallel::mclapply(IDs, function(id) dat[ID == id, c('deathsd', 'pi', 'IDsample')], mc.cores = n_cores)
+# for linux/mac  
+# dd = pbmcapply::pbmclapply( IDs, function(id) dat %>% dplyr::filter(ID == id) %>% dplyr::select(deathsd,pi, IDsample), 
+#                             mc.cores = n_cores, mc.preschedule = TRUE)
+
 
 stopCluster(cl)
 

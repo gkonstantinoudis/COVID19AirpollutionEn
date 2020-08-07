@@ -22,7 +22,7 @@ library(spdep)
 
 
 # Read main covariates file
-findata <- readRDS("data/20807_FindataGit")
+findata <- readRDS("data/200807_FindataGit")
 colnames(findata)
 
 
@@ -179,6 +179,7 @@ form.anal <- list(
 
 # define the function to run INLA
 
+
 in.mod.Poisson <- function(X, dat.inla){
   
   Y <- inla(formula = as.formula(X),
@@ -226,7 +227,6 @@ in.mod.Poisson <- function(X, dat.inla){
 }
 
 
-
 # neighbor matrix
 W.nb <- poly2nb(findata)
 nb2INLA("W.adj", W.nb) 
@@ -235,8 +235,8 @@ nb2INLA("W.adj", W.nb)
 hyper.bym <- list(theta1 = list('PCprior', c(1,0.01)), theta2 = list('PCprior', c(0.5, 0.5)))
 hyper.rw<- list(theta = list(prior="pc.prec", param=c(1,0.01), prec=list(initial=log(10^-2), fixed=TRUE)))
 
-# k is the an indicator to run on the different samples
-k <- as.list(1:5)
+# k is the index of the different samples
+k <- as.list(1:3)
 
 
 t_0 <- Sys.time()
@@ -287,12 +287,12 @@ for(i in 1:8){
   # run the the function in parallel
   outpar <- parLapply(cl = cl_inla, k, par.fun)
   
-  
+
   # close parallel environment
   stopCluster(cl_inla)
   
   # Propagate the uncertainty of the sampling
-  fin_mod <- inla.merge(outpar)
+  fin_mod <- inla.merge(outpar, mc.cores = 1) # the mc.cores argument can only be changed on Unix machines
   
   # and store
   saveRDS(fin_mod, file = paste0("data/BMA_CMB_", i, "_", pol))
