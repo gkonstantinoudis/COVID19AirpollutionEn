@@ -18,7 +18,7 @@ library(spdep)
 library(lwgeom)
 
 
-# Read gridded World population files
+# Read gridded World population files. They can be downloaded from https://sedac.ciesin.columbia.edu/data/collection/gpw-v4
 r_1 = raster("data/gpw_v4_population_count_rev11_2015_30_sec_2.asc")
 r_2 = raster("data/gpw_v4_population_count_rev11_2015_30_sec_3.asc")
 
